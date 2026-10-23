@@ -797,3 +797,443 @@ body {
     padding-right: 80px;
   }
 }
+
+/* =========================================================
+   VERSI 2: logo, status, beranda, playlist pengguna, upload
+   ========================================================= */
+
+/* --- Logo (gambar + teks, bisa diklik) --- */
+.brand {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+.brand-logo {
+  display: block;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  object-fit: contain;
+}
+
+/* --- Baris status global (terlihat di semua halaman) --- */
+.status-line {
+  min-height: 1.2em;
+  margin: 0 0 10px;
+}
+
+/* --- Tombol & tautan kecil --- */
+.link-btn {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  padding: 8px 12px;
+  border: 1px solid #ef444455;
+  border-radius: 8px;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: #ef444422;
+}
+
+/* --- Tampilkan lebih banyak --- */
+.show-more-wrap {
+  margin-top: 12px;
+}
+
+.show-more-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.show-more-btn:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+
+/* --- Playlist pengguna di beranda --- */
+.home-section {
+  margin-top: 32px;
+}
+
+.home-section .section-heading {
+  margin-bottom: 12px;
+}
+
+.playlist-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.playlist-grid .empty-state {
+  grid-column: 1 / -1;
+}
+
+.playlist-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.playlist-card:hover {
+  border-color: var(--border);
+  background: var(--surface-raised);
+}
+
+.playlist-card-cover {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface-raised);
+  color: var(--muted);
+  font-size: 2rem;
+  object-fit: cover;
+}
+
+.playlist-card-name,
+.playlist-card-by,
+.playlist-card-count {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-card-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.playlist-card-by {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.playlist-card-by.is-owner {
+  color: #22c55e;
+  font-weight: 700;
+}
+
+.playlist-card-count {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+@media (min-width: 560px) {
+  .playlist-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* --- Halaman playlist (Playlist Saya & detail) --- */
+.playlist-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 12px;
+}
+
+.playlist-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.playlist-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.playlist-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* --- Halaman upload --- */
+.upload-card {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.upload-card h2 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+}
+
+.upload-card p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.upload-card .upload-note {
+  margin: 12px 0 0;
+  color: var(--accent);
+}
+
+.input-form input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- Modal tambahan --- */
+.modal-actions.spaced {
+  margin-top: 16px;
+}
+
+.modal-list-options p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.playlist-option-btn.is-new {
+  border-style: dashed;
+  color: var(--accent);
+}
+
+@media (max-width: 400px) {
+  .nav-tab {
+    padding: 8px 12px;
+    font-size: 0.82rem;
+  }
+}
+
+/* =========================================================
+   DETAIL LAGU (NOW PLAYING) ala Spotify
+   ========================================================= */
+
+/* Area lagu di bar bawah bisa ditekan */
+.now-playing {
+  cursor: pointer;
+}
+
+.now-playing:hover .now-playing-title {
+  color: var(--accent);
+}
+
+.now-playing:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+body.np-open {
+  overflow: hidden;
+}
+
+.now-playing-view {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  padding: calc(12px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: #0b0b09;
+}
+
+/* Latar kabur dari sampul lagu */
+.np-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-position: center;
+  background-size: cover;
+  filter: blur(40px) brightness(0.45) saturate(1.3);
+  transform: scale(1.4);
+}
+
+.np-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(420px, 100%);
+  margin: 0 auto;
+}
+
+.np-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.np-icon-btn {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.np-icon-btn:hover:not(:disabled) {
+  background: #ffffff1a;
+}
+
+.np-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.np-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+  width: min(420px, 100%);
+  margin: auto;
+  padding: 16px 0;
+}
+
+/* Sampul dipotong persegi: thumbnail YouTube punya garis hitam atas-bawah */
+.np-cover-wrap {
+  width: min(100%, 52vh);
+  margin: 0 auto;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.np-cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.34);
+}
+
+.np-title {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.np-artist {
+  margin: 6px 0 0;
+  color: #d9dbe4;
+  font-size: 0.95rem;
+}
+
+.np-uploader {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.np-progress .progress {
+  display: block;
+  width: 100%;
+  height: 6px;
+}
+
+.np-times {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.np-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.np-controls .control-button {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.np-controls .control-button.primary {
+  width: 72px;
+  height: 72px;
+}
+
+.np-controls .control-button svg {
+  max-width: none;
+  max-height: none;
+}
+
+@media (max-height: 640px) {
+  .np-body {
+    gap: 14px;
+  }
+
+  .np-cover-wrap {
+    width: min(100%, 42vh);
+  }
+}

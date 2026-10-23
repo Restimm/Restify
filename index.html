@@ -11,10 +11,11 @@
 </head>
 <body>
   <main class="app">
-    <!-- HEADER & STATUS USER -->
+    <!-- HEADER: logo (gambar + teks bisa diklik) & status user -->
     <header class="header">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">
+      <a href="#" class="brand" id="brandLink" aria-label="Restify, kembali ke beranda">
+        <img class="brand-logo" src="restify.png" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+        <span class="brand-mark" hidden aria-hidden="true">
           <svg viewBox="0 0 32 32" fill="none">
             <path d="M12 23V8l13-3v15" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             <ellipse cx="8.5" cy="23.5" rx="3.5" ry="2.5" fill="currentColor"/>
@@ -22,21 +23,14 @@
           </svg>
         </span>
         <h1>Restify</h1>
-      </div>
+      </a>
       <div class="user-badge" id="userBadgeContainer">
         <span id="userNameDisplay">Tamu</span>
         <button type="button" class="btn-auth" id="loginLogoutBtn">Login</button>
       </div>
     </header>
 
-    <!-- FORMS INPUT -->
-    <section class="form-section">
-      <form id="addLinkForm" class="input-form">
-        <input type="url" id="linkInput" placeholder="Tempel link YouTube..." required>
-        <button type="submit" id="addLinkButton">Tambah</button>
-      </form>
-    </section>
-
+    <!-- PENCARIAN -->
     <section class="form-section">
       <form id="searchForm" class="input-form">
         <input type="text" id="searchInput" placeholder="Cari judul lagu yang tersimpan..." required>
@@ -44,32 +38,83 @@
       </form>
     </section>
 
-    <!-- TAB NAVIGASI UTAMA -->
+    <!-- NAVIGASI UTAMA -->
     <nav class="main-nav" aria-label="Navigasi Utama">
-      <button class="nav-tab active" data-tab="all">Daftar Putar</button>
-            <button class="nav-tab" data-tab="playlists">Playlist Saya</button>
+      <button type="button" class="nav-tab active" data-tab="all">Daftar Putar</button>
+      <button type="button" class="nav-tab" data-tab="playlists">Playlist Saya</button>
+      <button type="button" class="nav-tab" data-tab="upload">Upload</button>
     </nav>
 
-    <!-- KONTEN TAB: PLAYLIST ACTION BAR -->
-    <div id="playlistSection" class="sub-filter-bar" hidden>
-      <button class="btn-secondary" id="createPlaylistBtn">+ Buat Playlist Baru</button>
-      <div id="playlistChipsContainer" class="playlist-chips"></div>
-    </div>
+    <p class="status status-line" id="status" role="status" aria-live="polite"></p>
 
-    <!-- DAFTAR LAGU -->
-    <section aria-labelledby="resultsHeading">
-      <div class="section-heading">
-        <h2 id="resultsHeading">Daftar Putar Utama</h2>
-        <span class="status" id="status" role="status" aria-live="polite"></span>
+    <!-- ===== HALAMAN: BERANDA ===== -->
+    <section class="view" id="homeView">
+      <section aria-labelledby="resultsHeading">
+        <div class="section-heading">
+          <h2 id="resultsHeading">Daftar Putar Utama</h2>
+        </div>
+        <div class="results" id="results"></div>
+        <div class="show-more-wrap" id="showMoreWrap" hidden>
+          <button type="button" class="btn-secondary show-more-btn" id="showMoreBtn">Tampilkan lebih banyak</button>
+        </div>
+      </section>
+
+      <section class="home-section" id="homePlaylistsSection" aria-labelledby="homePlaylistsHeading">
+        <div class="section-heading">
+          <h2 id="homePlaylistsHeading">Playlist Pengguna</h2>
+          <button type="button" class="link-btn" id="reshuffleBtn" hidden>Acak ulang</button>
+        </div>
+        <div class="playlist-grid" id="homePlaylistGrid"></div>
+      </section>
+    </section>
+
+    <!-- ===== HALAMAN: PLAYLIST SAYA & DETAIL PLAYLIST ===== -->
+    <section class="view" id="playlistView" hidden>
+      <div id="playlistSection" class="sub-filter-bar" hidden>
+        <button type="button" class="btn-secondary" id="createPlaylistBtn">+ Buat Playlist Baru</button>
+        <div id="playlistChipsContainer" class="playlist-chips"></div>
       </div>
-      <div class="results" id="results"></div>
+
+      <button type="button" class="link-btn" id="backBtn" hidden>&larr; Kembali ke beranda</button>
+
+      <div class="empty-state" id="playlistMessage" hidden></div>
+
+      <div id="playlistPanel" hidden>
+        <div class="playlist-header">
+          <div>
+            <h2 id="playlistTitle"></h2>
+            <p id="playlistMeta"></p>
+          </div>
+          <div class="playlist-header-actions">
+            <button type="button" class="btn-secondary" id="playAllBtn">&#9654; Putar semua</button>
+            <button type="button" class="btn-danger" id="deletePlaylistBtn" hidden>Hapus playlist</button>
+          </div>
+        </div>
+        <div class="results" id="playlistResults"></div>
+      </div>
+    </section>
+
+    <!-- ===== HALAMAN: UPLOAD LAGU ===== -->
+    <section class="view" id="uploadView" hidden>
+      <div class="upload-card">
+        <h2>Upload Lagu</h2>
+        <p>Tempel link video YouTube. Lagu yang diupload akan muncul di Daftar Putar untuk semua pengguna.</p>
+        <form id="addLinkForm" class="input-form">
+          <input type="url" id="linkInput" placeholder="Tempel link YouTube..." required>
+          <button type="submit" id="addLinkButton">Tambah</button>
+        </form>
+        <p class="upload-note" id="uploadLoginNote" hidden>
+          Kamu perlu login dulu untuk mengupload lagu.
+          <button type="button" class="link-btn" id="uploadLoginBtn">Login sekarang</button>
+        </p>
+      </div>
     </section>
   </main>
 
   <!-- PLAYER BOTTOM BAR -->
   <section class="player" aria-label="Pemutar Musik">
     <div class="player-inner">
-      <div class="now-playing">
+      <div class="now-playing" id="nowPlayingOpen" role="button" tabindex="0" aria-label="Buka detail lagu">
         <img class="cover" id="playerCover" alt="" src="">
         <div class="now-playing-copy">
           <p class="now-playing-title" id="playerTitle">Belum ada lagu</p>
@@ -101,11 +146,62 @@
     </div>
   </section>
 
-  <!-- MODAL LOGIN POPUP -->
+  <!-- DETAIL LAGU (NOW PLAYING) -->
+  <section class="now-playing-view" id="nowPlayingView" aria-label="Detail lagu" hidden>
+    <div class="np-backdrop" id="npBackdrop" aria-hidden="true"></div>
+
+    <header class="np-header">
+      <button type="button" class="np-icon-btn" id="npCloseBtn" aria-label="Tutup detail lagu">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <p class="np-label">Sedang Diputar</p>
+      <button type="button" class="np-icon-btn" id="npAddBtn" aria-label="Tambah ke playlist" title="Tambah ke playlist" disabled>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </header>
+
+    <div class="np-body">
+      <div class="np-cover-wrap">
+        <img class="np-cover" id="npCover" alt="">
+      </div>
+
+      <div class="np-meta">
+        <h2 class="np-title" id="npTitle">Belum ada lagu</h2>
+        <p class="np-artist" id="npArtist">-</p>
+        <p class="np-uploader" id="npUploader"></p>
+      </div>
+
+      <div class="np-progress">
+        <input class="progress" id="npProgress" type="range" min="0" max="1000" value="0" aria-label="Posisi lagu" disabled>
+        <div class="np-times">
+          <span id="npCurrentTime">0:00</span>
+          <span id="npDuration">0:00</span>
+        </div>
+      </div>
+
+      <div class="np-controls">
+        <button class="control-button" id="npShuffleBtn" type="button" aria-label="Acak" title="Shuffle Mode">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20l16-16M21 16v5h-5M15 15l5 5M4 4l5 5"/></svg>
+        </button>
+        <button class="control-button" id="npPrevBtn" type="button" aria-label="Sebelumnya" disabled>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zm3 7 10 7V5z"/></svg>
+        </button>
+        <button class="control-button primary" id="npPlayBtn" type="button" aria-label="Putar" disabled>
+          <svg id="npPlayIcon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="npPauseIcon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" hidden><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
+        </button>
+        <button class="control-button" id="npNextBtn" type="button" aria-label="Berikutnya" disabled>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM5 5v14l10-7z"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODAL LOGIN -->
   <div class="modal" id="loginModal" hidden>
     <div class="modal-content">
       <h3>Masukan Nama</h3>
-      <p>Masukan nama panggilan untuk mengunggah lagu.</p>
+      <p>Masukan nama panggilan untuk mengunggah lagu dan membuat playlist.</p>
       <form id="modalLoginForm">
         <input type="text" id="modalNameInput" placeholder="Masukan nama..." class="modal-input" required>
         <div class="modal-actions">
@@ -116,15 +212,30 @@
     </div>
   </div>
 
-  <!-- MODAL PILIH / TAMBAH KE PLAYLIST -->
+  <!-- MODAL TAMBAH KE PLAYLIST -->
   <div class="modal" id="playlistModal" hidden>
     <div class="modal-content">
       <h3>Tambah ke Playlist</h3>
       <p id="playlistModalSub">Pilih playlist tujuan:</p>
       <div id="playlistListOptions" class="modal-list-options"></div>
-      <div class="modal-actions" style="margin-top: 16px;">
+      <div class="modal-actions spaced">
         <button type="button" class="btn-secondary" id="closePlaylistModalBtn">Tutup</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL BUAT PLAYLIST BARU -->
+  <div class="modal" id="createPlaylistModal" hidden>
+    <div class="modal-content">
+      <h3>Buat Playlist Baru</h3>
+      <p>Beri nama playlist kamu.</p>
+      <form id="createPlaylistForm">
+        <input type="text" id="playlistNameInput" placeholder="Nama playlist..." class="modal-input" maxlength="40" required>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="closeCreatePlaylistBtn">Batal</button>
+          <button type="submit" class="btn-primary">Buat</button>
+        </div>
+      </form>
     </div>
   </div>
 

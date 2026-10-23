@@ -1,5 +1,5 @@
 /* =========================================================
-   Restify — YouTube Music Player dengan Supabase
+   Restify v2 — Supabase + YouTube IFrame Player API
    ========================================================= */
 
 const SUPABASE_URL = "https://vzgnmzgserqaknvtdgjr.supabase.co";
@@ -8,26 +8,43 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLI
 
 const USER_KEY = "restify_username";
 const LEGACY_TRACKS_KEY = "restify_saved_tracks";
-const LEGACY_PLAYLISTS_KEY = "restify_playlists";
 const OWNER_SECRET_CODE = "#1234";
 const OWNER_NAME = "Rsym";
 const OWNER_ICON = "⚡";
 
+const HOME_PAGE_SIZE = 7;       // jumlah lagu yang tampil di beranda sebelum "Tampilkan lebih banyak"
+const HOME_PLAYLIST_COUNT = 4;  // jumlah playlist acak di beranda
+
+const ICON_PLUS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';
+const ICON_MINUS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>';
+const ICON_TRASH = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6M14 10v6"/></svg>';
+
+/* ---------------- State ---------------- */
+
 let currentUser = localStorage.getItem(USER_KEY) || "";
 
-const defaultTracks = [];
+let tracks = [];                 // semua lagu (Supabase: tabel tracks)
+let playlists = [];              // [{ id, owner, name, tracks, created_at }]
+let dataLoaded = false;
 
-let tracks = [];
-let playlists = {};
-let activeTab = "all";
-let activePlaylistName = null;
-let activeDisplayTracks = [];
+let view = "home";               // home | mine | detail | upload
 let searchQuery = "";
-let currentIndex = -1;
+let homeLimit = HOME_PAGE_SIZE;
+let activePlaylistId = null;     // playlist terpilih di tab "Playlist Saya"
+let detailPlaylistId = null;     // playlist yang dibuka dari beranda
+let homePlaylistIds = [];        // playlist acak yang tampil di beranda
+
+let queue = [];                  // antrean yang sedang diputar
+let currentIndex = -1;           // posisi di dalam queue
 let isShuffle = false;
+
 let selectedTrackForPlaylist = null;
+let pendingTrackForNewPlaylist = null;
+let creatingPlaylist = false;
 
 /* ---------------- Elemen DOM ---------------- */
+
+const brandLink = document.querySelector("#brandLink");
 const userNameDisplay = document.querySelector("#userNameDisplay");
 const loginLogoutBtn = document.querySelector("#loginLogoutBtn");
 const loginModal = document.querySelector("#loginModal");
@@ -35,23 +52,48 @@ const modalLoginForm = document.querySelector("#modalLoginForm");
 const modalNameInput = document.querySelector("#modalNameInput");
 const closeModalBtn = document.querySelector("#closeModalBtn");
 
-const addLinkForm = document.querySelector("#addLinkForm");
-const linkInput = document.querySelector("#linkInput");
 const searchForm = document.querySelector("#searchForm");
 const searchInput = document.querySelector("#searchInput");
-const searchButton = document.querySelector("#searchButton");
 const statusElement = document.querySelector("#status");
-const resultsElement = document.querySelector("#results");
-const resultsHeading = document.querySelector("#resultsHeading");
-
 const navTabs = document.querySelectorAll(".nav-tab");
+
+const homeView = document.querySelector("#homeView");
+const resultsHeading = document.querySelector("#resultsHeading");
+const resultsElement = document.querySelector("#results");
+const showMoreWrap = document.querySelector("#showMoreWrap");
+const showMoreBtn = document.querySelector("#showMoreBtn");
+const homePlaylistsSection = document.querySelector("#homePlaylistsSection");
+const homePlaylistGrid = document.querySelector("#homePlaylistGrid");
+const reshuffleBtn = document.querySelector("#reshuffleBtn");
+
+const playlistView = document.querySelector("#playlistView");
 const playlistSection = document.querySelector("#playlistSection");
 const playlistChipsContainer = document.querySelector("#playlistChipsContainer");
 const createPlaylistBtn = document.querySelector("#createPlaylistBtn");
+const backBtn = document.querySelector("#backBtn");
+const playlistMessage = document.querySelector("#playlistMessage");
+const playlistPanel = document.querySelector("#playlistPanel");
+const playlistTitle = document.querySelector("#playlistTitle");
+const playlistMeta = document.querySelector("#playlistMeta");
+const playAllBtn = document.querySelector("#playAllBtn");
+const deletePlaylistBtn = document.querySelector("#deletePlaylistBtn");
+const playlistResults = document.querySelector("#playlistResults");
+
+const uploadView = document.querySelector("#uploadView");
+const addLinkForm = document.querySelector("#addLinkForm");
+const linkInput = document.querySelector("#linkInput");
+const addLinkButton = document.querySelector("#addLinkButton");
+const uploadLoginNote = document.querySelector("#uploadLoginNote");
+const uploadLoginBtn = document.querySelector("#uploadLoginBtn");
 
 const playlistModal = document.querySelector("#playlistModal");
 const playlistListOptions = document.querySelector("#playlistListOptions");
 const closePlaylistModalBtn = document.querySelector("#closePlaylistModalBtn");
+
+const createPlaylistModal = document.querySelector("#createPlaylistModal");
+const createPlaylistForm = document.querySelector("#createPlaylistForm");
+const playlistNameInput = document.querySelector("#playlistNameInput");
+const closeCreatePlaylistBtn = document.querySelector("#closeCreatePlaylistBtn");
 
 const playButton = document.querySelector("#playButton");
 const playIcon = document.querySelector("#playIcon");
@@ -66,32 +108,31 @@ const playerTitle = document.querySelector("#playerTitle");
 const playerArtist = document.querySelector("#playerArtist");
 const playerCover = document.querySelector("#playerCover");
 
-/* ---------------- Helper UI & Storage ---------------- */
+// Detail lagu (Now Playing)
+const nowPlayingOpen = document.querySelector("#nowPlayingOpen");
+const nowPlayingView = document.querySelector("#nowPlayingView");
+const npBackdrop = document.querySelector("#npBackdrop");
+const npCloseBtn = document.querySelector("#npCloseBtn");
+const npAddBtn = document.querySelector("#npAddBtn");
+const npCover = document.querySelector("#npCover");
+const npTitle = document.querySelector("#npTitle");
+const npArtist = document.querySelector("#npArtist");
+const npUploader = document.querySelector("#npUploader");
+const npProgress = document.querySelector("#npProgress");
+const npCurrentTime = document.querySelector("#npCurrentTime");
+const npDuration = document.querySelector("#npDuration");
+const npPlayBtn = document.querySelector("#npPlayBtn");
+const npPlayIcon = document.querySelector("#npPlayIcon");
+const npPauseIcon = document.querySelector("#npPauseIcon");
+const npPrevBtn = document.querySelector("#npPrevBtn");
+const npNextBtn = document.querySelector("#npNextBtn");
+const npShuffleBtn = document.querySelector("#npShuffleBtn");
+let npHistory = false;
 
-function updateAuthUI() {
-  if (currentUser) {
-    if (currentUser === OWNER_NAME) {
-      userNameDisplay.textContent = `${currentUser} ${OWNER_ICON}`;
-      userNameDisplay.parentElement.classList.add("is-owner-user");
-    } else {
-      userNameDisplay.textContent = currentUser;
-      userNameDisplay.parentElement.classList.remove("is-owner-user");
-    }
-    loginLogoutBtn.textContent = "Keluar";
-  } else {
-    userNameDisplay.textContent = "Tamu";
-    userNameDisplay.parentElement.classList.remove("is-owner-user");
-    loginLogoutBtn.textContent = "Login";
-  }
-  updateDisplayedTracks();
-}
+/* ---------------- Helper umum ---------------- */
 
-async function persistPlaylist(name) {
-  const { error } = await supabaseClient
-    .from("playlists")
-    .update({ tracks: playlists[name] || [] })
-    .eq("name", name);
-  if (error) throw error;
+function setStatus(msg) {
+  statusElement.textContent = msg;
 }
 
 function showDatabaseError(error, fallback = "Terjadi masalah saat mengakses database.") {
@@ -99,8 +140,12 @@ function showDatabaseError(error, fallback = "Terjadi masalah saat mengakses dat
   setStatus(fallback);
 }
 
-function setStatus(msg) {
-  statusElement.textContent = msg;
+function dbMessage(error, fallback) {
+  const text = `${error?.code || ""} ${error?.message || ""}`;
+  if (/owner|PGRST204|42703/i.test(text)) {
+    return "Kolom 'owner' belum ada di Supabase. Jalankan supabase.sql dulu.";
+  }
+  return fallback;
 }
 
 function formatTime(seconds) {
@@ -110,23 +155,13 @@ function formatTime(seconds) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function setPlayingState(isPlaying) {
-  playIcon.toggleAttribute("hidden", isPlaying);
-  pauseIcon.toggleAttribute("hidden", !isPlaying);
-  playButton.setAttribute("aria-label", isPlaying ? "Jeda" : "Putar");
-}
-
-function updatePlayerButtons() {
-  const hasTrack = currentIndex >= 0;
-  playButton.disabled = !hasTrack;
-  prevButton.disabled = !hasTrack || currentIndex <= 0;
-  nextButton.disabled = !hasTrack || currentIndex >= activeDisplayTracks.length - 1;
-}
-
-function decodeHtml(str) {
-  const t = document.createElement("textarea");
-  t.innerHTML = str;
-  return t.value;
+function shuffleArray(list) {
+  const arr = [...list];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 function getVideoId(trackUrl) {
@@ -146,115 +181,149 @@ function getVideoId(trackUrl) {
   }
 }
 
-/* ---------------- Render Navigasi & Tab ---------------- */
-
-function switchTab(tabName) {
-  activeTab = tabName;
-  navTabs.forEach(tab => tab.classList.toggle("active", tab.dataset.tab === tabName));
-  playlistSection.hidden = (tabName !== "playlists");
-
-  if (searchQuery) {
-    resultsHeading.textContent = `Hasil pencarian: ${searchQuery}`;
-  } else if (tabName === "all") {
-    resultsHeading.textContent = "Daftar Putar Utama";
-  } else if (tabName === "playlists") {
-    renderPlaylistChips();
-    resultsHeading.textContent = activePlaylistName ? `Playlist: ${activePlaylistName}` : "Pilih Playlist";
-  }
-  updateDisplayedTracks();
+function videoKey(track) {
+  return (track && (track.video_id || getVideoId(track.url || ""))) || "";
 }
 
-function updateDisplayedTracks() {
-  let baseTracks = [];
-  if (activeTab === "all") {
-    baseTracks = [...tracks];
-  } else if (activeTab === "playlists") {
-    baseTracks = activePlaylistName && playlists[activePlaylistName]
-      ? [...playlists[activePlaylistName]]
-      : [];
+function sameTrack(a, b) {
+  if (!a || !b) return false;
+  const ka = videoKey(a);
+  const kb = videoKey(b);
+  if (ka && kb) return ka === kb;
+  return a.url === b.url;
+}
+
+function isOwnerAdmin() {
+  return currentUser === OWNER_NAME;
+}
+
+function ownerLabel(name) {
+  return name === OWNER_NAME ? `${name} ${OWNER_ICON}` : name;
+}
+
+function normalizePlaylist(row) {
+  return {
+    ...row,
+    owner: row.owner || "Anonim",
+    tracks: Array.isArray(row.tracks) ? row.tracks : []
+  };
+}
+
+function myPlaylists() {
+  return currentUser ? playlists.filter(p => p.owner === currentUser) : [];
+}
+
+function panelPlaylist() {
+  const id = view === "detail" ? detailPlaylistId : activePlaylistId;
+  return playlists.find(p => p.id === id) || null;
+}
+
+function openLoginModal() {
+  loginModal.hidden = false;
+  modalNameInput.focus();
+}
+
+/* ---------------- Auth ---------------- */
+
+function updateAuthUI() {
+  if (currentUser) {
+    if (currentUser === OWNER_NAME) {
+      userNameDisplay.textContent = `${currentUser} ${OWNER_ICON}`;
+      userNameDisplay.parentElement.classList.add("is-owner-user");
+    } else {
+      userNameDisplay.textContent = currentUser;
+      userNameDisplay.parentElement.classList.remove("is-owner-user");
+    }
+    loginLogoutBtn.textContent = "Keluar";
+  } else {
+    userNameDisplay.textContent = "Tamu";
+    userNameDisplay.parentElement.classList.remove("is-owner-user");
+    loginLogoutBtn.textContent = "Login";
+  }
+  renderCurrentView();
+}
+
+/* ---------------- Navigasi halaman ---------------- */
+
+function showView(next, opts = {}) {
+  const prev = view;
+  view = next;
+
+  homeView.hidden = next !== "home";
+  playlistView.hidden = next !== "mine" && next !== "detail";
+  uploadView.hidden = next !== "upload";
+
+  navTabs.forEach(tab => {
+    const t = tab.dataset.tab;
+    tab.classList.toggle(
+      "active",
+      (t === "all" && next === "home") ||
+      (t === "playlists" && next === "mine") ||
+      (t === "upload" && next === "upload")
+    );
+  });
+
+  if (next === "home" && prev !== "home") {
+    homeLimit = HOME_PAGE_SIZE;
+    pickHomePlaylists();
   }
 
-  activeDisplayTracks = searchQuery
-    ? baseTracks.filter(track => (track.title || "").toLocaleLowerCase("id").includes(searchQuery.toLocaleLowerCase("id")))
-    : baseTracks;
-  renderTracks();
+  renderCurrentView();
+  if (opts.scroll !== false) window.scrollTo({ top: 0 });
+}
+
+function goHome() {
+  searchQuery = "";
+  searchInput.value = "";
+  homeLimit = HOME_PAGE_SIZE;
+  pickHomePlaylists();
+  showView("home");
+}
+
+function renderCurrentView() {
+  if (view === "home") renderHome();
+  else if (view === "mine") renderMine();
+  else if (view === "detail") renderDetail();
+  else if (view === "upload") renderUpload();
   updatePlayerButtons();
 }
 
-/* ---------------- Playlist Manager ---------------- */
+/* ---------------- Render daftar lagu ---------------- */
 
-function renderPlaylistChips() {
-  playlistChipsContainer.replaceChildren();
-  const names = Object.keys(playlists);
+function isCurrentTrack(track) {
+  const cur = queue[currentIndex];
+  return !!cur && sameTrack(cur, track);
+}
 
-  if (names.length === 0) {
-    playlistChipsContainer.innerHTML = '<span style="color:var(--muted); font-size:0.8rem;">Belum ada playlist</span>';
-    return;
-  }
-
-  if (!activePlaylistName || !playlists[activePlaylistName]) {
-    activePlaylistName = names[0];
-  }
-
-  names.forEach(name => {
-    const chip = document.createElement("button");
-    chip.className = `playlist-chip ${name === activePlaylistName ? "active" : ""}`;
-    chip.textContent = name;
-    chip.addEventListener("click", () => {
-      activePlaylistName = name;
-      resultsHeading.textContent = `Playlist: ${name}`;
-      renderPlaylistChips();
-      updateDisplayedTracks();
-    });
-    playlistChipsContainer.append(chip);
+function refreshHighlights() {
+  const cur = queue[currentIndex];
+  const key = cur ? videoKey(cur) : "";
+  document.querySelectorAll(".track-row").forEach(row => {
+    row.setAttribute("aria-current", String(!!key && row.dataset.key === key));
   });
 }
 
-function openAddToPlaylistModal(track) {
-  selectedTrackForPlaylist = track;
-  playlistListOptions.replaceChildren();
-
-  const names = Object.keys(playlists);
-  if (names.length === 0) {
-    playlistListOptions.innerHTML = '<p style="color:var(--muted); font-size:0.8rem;">Belum ada playlist. Buat terlebih dahulu.</p>';
-  } else {
-    names.forEach(name => {
-      const btn = document.createElement("button");
-      btn.className = "playlist-option-btn";
-      btn.textContent = name;
-      btn.addEventListener("click", () => {
-        // Cek duplikasi video URL
-        const exists = playlists[name].some(t => t.url === track.url);
-        if (!exists) {
-          playlists[name].push(track);
-          persistPlaylist(name).then(() => {
-            alert(`Lagu berhasil ditambahkan ke "${name}"`);
-            if (activeTab === "playlists") updateDisplayedTracks();
-          }).catch(error => {
-            playlists[name].pop();
-            showDatabaseError(error, "Gagal menyimpan lagu ke playlist.");
-          });
-        } else {
-          alert(`Lagu sudah ada di "${name}"`);
-        }
-        playlistModal.hidden = true;
-        if (activeTab === "playlists") updateDisplayedTracks();
-      });
-      playlistListOptions.append(btn);
-    });
-  }
-
-  playlistModal.hidden = false;
+function makeActionButton(icon, title, extraClass, handler) {
+  const btn = document.createElement("button");
+  btn.className = `track-action-btn ${extraClass}`.trim();
+  btn.type = "button";
+  btn.title = title;
+  btn.setAttribute("aria-label", title);
+  btn.innerHTML = icon;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    handler();
+  });
+  return btn;
 }
 
-/* ---------------- Render List Lagu ---------------- */
-
-function createTrackRow(track, index) {
+function createTrackRow(track, index, fullList, ctx) {
   const row = document.createElement("button");
   row.className = "track-row";
   row.type = "button";
-  row.setAttribute("aria-current", String(index === currentIndex));
-  row.addEventListener("click", () => playTrack(index));
+  row.dataset.key = videoKey(track);
+  row.setAttribute("aria-current", String(isCurrentTrack(track)));
+  row.addEventListener("click", () => startQueue(fullList, index));
 
   const cover = document.createElement("img");
   cover.className = "cover";
@@ -275,7 +344,6 @@ function createTrackRow(track, index) {
 
   const uploader = document.createElement("p");
   uploader.className = "track-uploader";
-
   const uploaderName = track.uploader || "Anonim";
   if (uploaderName === OWNER_NAME) {
     uploader.classList.add("is-owner");
@@ -290,30 +358,14 @@ function createTrackRow(track, index) {
   const actions = document.createElement("div");
   actions.className = "track-actions";
 
-  // Tombol Tambah ke Playlist
-  const addPlBtn = document.createElement("button");
-  addPlBtn.className = "track-action-btn";
-  addPlBtn.type = "button";
-  addPlBtn.title = "Tambah ke Playlist";
-  addPlBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';
-  addPlBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    openAddToPlaylistModal(track);
-  });
-  actions.append(addPlBtn);
+  if (ctx.mode === "playlist" && ctx.canEdit) {
+    actions.append(makeActionButton(ICON_MINUS, "Hapus dari playlist", "", () => removeTrackFromPlaylist(ctx.playlist, track)));
+  } else {
+    actions.append(makeActionButton(ICON_PLUS, "Tambah ke playlist", "", () => openAddToPlaylistModal(track)));
+  }
 
-  // Tombol Hapus (Eksklusif Owner)
-  if (currentUser === OWNER_NAME) {
-    const del = document.createElement("button");
-    del.className = "track-action-btn delete-btn";
-    del.type = "button";
-    del.title = "Hapus lagu";
-    del.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6M14 10v6"/></svg>';
-    del.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteTrack(index);
-    });
-    actions.append(del);
+  if (ctx.mode === "home" && isOwnerAdmin()) {
+    actions.append(makeActionButton(ICON_TRASH, "Hapus lagu", "delete-btn", () => deleteTrack(track)));
   }
 
   const item = document.createElement("div");
@@ -322,74 +374,369 @@ function createTrackRow(track, index) {
   return item;
 }
 
-function renderTracks() {
-  resultsElement.replaceChildren();
-  if (activeDisplayTracks.length === 0) {
-    resultsElement.innerHTML = '<div class="empty-state">Belum ada lagu dalam daftar ini.</div>';
+function renderTrackList(container, shownList, fullList, ctx, emptyText) {
+  container.replaceChildren();
+  if (shownList.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = emptyText;
+    container.append(empty);
     return;
   }
-
   const fragment = document.createDocumentFragment();
-  activeDisplayTracks.forEach((track, index) => {
-    fragment.append(createTrackRow(track, index));
+  shownList.forEach((track, index) => {
+    fragment.append(createTrackRow(track, index, fullList, ctx));
   });
-  resultsElement.append(fragment);
-  setStatus(`${activeDisplayTracks.length} lagu`);
+  container.append(fragment);
 }
 
-/* ---------------- Hapus lagu ---------------- */
+/* ---------------- Halaman: Beranda ---------------- */
 
-function stopPlayback() {
-  pendingVideoId = null;
-  if (ytReady) ytPlayer.stopVideo();
-  stopProgressTimer();
-  currentIndex = -1;
-  playerTitle.textContent = "Belum ada lagu";
-  playerArtist.textContent = "-";
-  playerCover.removeAttribute("src");
-  progress.value = "0";
-  progress.disabled = true;
-  currentTimeElement.textContent = "0:00";
-  durationElement.textContent = "0:00";
-  setPlayingState(false);
+function getHomeTracks() {
+  if (!searchQuery) return tracks;
+  const q = searchQuery.toLocaleLowerCase("id");
+  return tracks.filter(track => (track.title || "").toLocaleLowerCase("id").includes(q));
 }
 
-async function deleteTrack(index) {
-  if (currentUser !== OWNER_NAME) {
-    alert("Hanya Owner yang memiliki akses untuk menghapus lagu!");
+function renderHome() {
+  const all = getHomeTracks();
+  const shown = all.slice(0, homeLimit);
+
+  resultsHeading.textContent = searchQuery
+    ? `Hasil pencarian: ${searchQuery} (${all.length})`
+    : "Daftar Putar Utama";
+
+  renderTrackList(
+    resultsElement,
+    shown,
+    all,
+    { mode: "home" },
+    dataLoaded ? "Belum ada lagu dalam daftar ini." : "Memuat lagu..."
+  );
+
+  const remaining = all.length - shown.length;
+  showMoreWrap.hidden = remaining <= 0;
+
+  homePlaylistsSection.hidden = !!searchQuery;
+  renderHomePlaylists();
+}
+
+function pickHomePlaylists() {
+  const candidates = playlists.filter(p => p.tracks.length > 0);
+  homePlaylistIds = shuffleArray(candidates).slice(0, HOME_PLAYLIST_COUNT).map(p => p.id);
+}
+
+function createPlaylistCard(p) {
+  const card = document.createElement("button");
+  card.type = "button";
+  card.className = "playlist-card";
+  card.addEventListener("click", () => openPlaylistDetail(p.id));
+
+  const firstThumb = p.tracks.find(t => t.thumbnail)?.thumbnail;
+  let cover;
+  if (firstThumb) {
+    cover = document.createElement("img");
+    cover.src = firstThumb;
+    cover.alt = "";
+    cover.loading = "lazy";
+  } else {
+    cover = document.createElement("div");
+    cover.textContent = "♪";
+  }
+  cover.className = "playlist-card-cover";
+
+  const body = document.createElement("div");
+
+  const name = document.createElement("p");
+  name.className = "playlist-card-name";
+  name.textContent = p.name;
+
+  const by = document.createElement("p");
+  by.className = "playlist-card-by";
+  if (p.owner === OWNER_NAME) by.classList.add("is-owner");
+  by.textContent = `Dibuat oleh ${ownerLabel(p.owner)}`;
+
+  const count = document.createElement("p");
+  count.className = "playlist-card-count";
+  count.textContent = `${p.tracks.length} lagu`;
+
+  body.append(name, by, count);
+  card.append(cover, body);
+  return card;
+}
+
+function renderHomePlaylists() {
+  homePlaylistGrid.replaceChildren();
+  const list = homePlaylistIds
+    .map(id => playlists.find(p => p.id === id))
+    .filter(Boolean);
+
+  const candidates = playlists.filter(p => p.tracks.length > 0).length;
+  reshuffleBtn.hidden = candidates <= HOME_PLAYLIST_COUNT;
+
+  if (list.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = dataLoaded
+      ? "Belum ada playlist dari pengguna."
+      : "Memuat playlist...";
+    homePlaylistGrid.append(empty);
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  list.forEach(p => fragment.append(createPlaylistCard(p)));
+  homePlaylistGrid.append(fragment);
+}
+
+function openPlaylistDetail(id) {
+  detailPlaylistId = id;
+  showView("detail");
+}
+
+/* ---------------- Halaman: Playlist Saya & detail ---------------- */
+
+function showPlaylistMessage(text) {
+  playlistMessage.textContent = text;
+  playlistMessage.hidden = false;
+}
+
+function renderPlaylistChips(mine) {
+  playlistChipsContainer.replaceChildren();
+  mine.forEach(p => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `playlist-chip ${p.id === activePlaylistId ? "active" : ""}`.trim();
+    chip.textContent = p.name;
+    chip.addEventListener("click", () => {
+      activePlaylistId = p.id;
+      renderMine();
+    });
+    playlistChipsContainer.append(chip);
+  });
+}
+
+function renderPlaylistPanel(p) {
+  playlistMessage.hidden = true;
+  playlistPanel.hidden = false;
+
+  const canEdit = !!currentUser && p.owner === currentUser;
+  playlistTitle.textContent = p.name;
+  playlistMeta.textContent = `Dibuat oleh ${ownerLabel(p.owner)} · ${p.tracks.length} lagu`;
+  deletePlaylistBtn.hidden = !(canEdit || isOwnerAdmin());
+  playAllBtn.disabled = p.tracks.length === 0;
+
+  renderTrackList(
+    playlistResults,
+    p.tracks,
+    p.tracks,
+    { mode: "playlist", playlist: p, canEdit },
+    canEdit
+      ? "Playlist ini masih kosong. Tambahkan lagu dari Daftar Putar lewat tombol +."
+      : "Playlist ini masih kosong."
+  );
+}
+
+function renderMine() {
+  backBtn.hidden = true;
+
+  if (!currentUser) {
+    playlistSection.hidden = true;
+    playlistPanel.hidden = true;
+    showPlaylistMessage("Login dulu untuk membuat dan melihat playlist kamu.");
     return;
   }
 
-  const track = activeDisplayTracks[index];
-  if (!track) return;
-  if (!confirm(`Hapus "${track.title}"?`)) return;
+  playlistSection.hidden = false;
+  const mine = myPlaylists();
+
+  if (mine.length === 0) {
+    renderPlaylistChips(mine);
+    playlistPanel.hidden = true;
+    showPlaylistMessage('Kamu belum punya playlist. Klik "+ Buat Playlist Baru" untuk mulai.');
+    return;
+  }
+
+  if (!mine.some(p => p.id === activePlaylistId)) activePlaylistId = mine[0].id;
+  renderPlaylistChips(mine);
+  renderPlaylistPanel(mine.find(p => p.id === activePlaylistId));
+}
+
+function renderDetail() {
+  playlistSection.hidden = true;
+  backBtn.hidden = false;
+
+  const p = playlists.find(x => x.id === detailPlaylistId);
+  if (!p) {
+    playlistPanel.hidden = true;
+    showPlaylistMessage("Playlist tidak ditemukan.");
+    return;
+  }
+  renderPlaylistPanel(p);
+}
+
+/* ---------------- Halaman: Upload ---------------- */
+
+function renderUpload() {
+  const loggedIn = !!currentUser;
+  uploadLoginNote.hidden = loggedIn;
+  linkInput.disabled = !loggedIn;
+  addLinkButton.disabled = !loggedIn;
+}
+
+/* ---------------- Playlist: simpan & ubah ---------------- */
+
+async function persistPlaylist(p) {
+  const { error } = await supabaseClient
+    .from("playlists")
+    .update({ tracks: p.tracks })
+    .eq("id", p.id);
+  if (error) throw error;
+}
+
+async function createPlaylist(rawName, trackToAdd = null) {
+  if (!currentUser) {
+    openLoginModal();
+    return null;
+  }
+  const name = rawName.trim();
+  if (!name) return null;
+
+  if (playlists.some(p => p.owner === currentUser && p.name.toLowerCase() === name.toLowerCase())) {
+    alert("Kamu sudah punya playlist dengan nama ini.");
+    return null;
+  }
 
   try {
-    if (track.id) {
-      const { error } = await supabaseClient.from("tracks").delete().eq("id", track.id);
-      if (error) throw error;
+    const { data, error } = await supabaseClient
+      .from("playlists")
+      .insert({ owner: currentUser, name, tracks: trackToAdd ? [trackToAdd] : [] })
+      .select()
+      .single();
+    if (error) {
+      if (error.code === "23505") {
+        alert("Kamu sudah punya playlist dengan nama ini.");
+        return null;
+      }
+      throw error;
     }
-    tracks = tracks.filter(item => item.url !== track.url);
-    for (const name of Object.keys(playlists)) {
-      playlists[name] = playlists[name].filter(item => item.url !== track.url);
-      await persistPlaylist(name);
-    }
-
-    if (index === currentIndex) stopPlayback();
-    else if (index < currentIndex) currentIndex--;
-    updateDisplayedTracks();
-    setStatus("Lagu dihapus");
+    const created = normalizePlaylist(data);
+    playlists.push(created);
+    activePlaylistId = created.id;
+    setStatus("Playlist berhasil dibuat");
+    return created;
   } catch (error) {
-    showDatabaseError(error, "Gagal menghapus lagu dari database.");
+    showDatabaseError(error, dbMessage(error, "Gagal membuat playlist."));
+    return null;
   }
 }
 
-/* ---------------- Supabase: lagu & pencarian lokal ---------------- */
+function openCreatePlaylistModal(trackToAdd = null) {
+  if (!currentUser) {
+    openLoginModal();
+    return;
+  }
+  pendingTrackForNewPlaylist = trackToAdd;
+  playlistNameInput.value = "";
+  createPlaylistModal.hidden = false;
+  playlistNameInput.focus();
+}
+
+function openAddToPlaylistModal(track) {
+  if (!currentUser) {
+    openLoginModal();
+    return;
+  }
+  selectedTrackForPlaylist = track;
+  playlistListOptions.replaceChildren();
+
+  const mine = myPlaylists();
+  if (mine.length === 0) {
+    const p = document.createElement("p");
+    p.textContent = "Kamu belum punya playlist.";
+    playlistListOptions.append(p);
+  } else {
+    mine.forEach(pl => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "playlist-option-btn";
+      btn.textContent = `${pl.name} (${pl.tracks.length})`;
+      btn.addEventListener("click", () => addTrackToPlaylist(pl, track));
+      playlistListOptions.append(btn);
+    });
+  }
+
+  const newBtn = document.createElement("button");
+  newBtn.type = "button";
+  newBtn.className = "playlist-option-btn is-new";
+  newBtn.textContent = "+ Playlist baru";
+  newBtn.addEventListener("click", () => {
+    playlistModal.hidden = true;
+    openCreatePlaylistModal(selectedTrackForPlaylist);
+  });
+  playlistListOptions.append(newBtn);
+
+  playlistModal.hidden = false;
+}
+
+async function addTrackToPlaylist(p, track) {
+  playlistModal.hidden = true;
+  if (p.tracks.some(t => sameTrack(t, track))) {
+    alert(`Lagu sudah ada di "${p.name}"`);
+    return;
+  }
+  const previous = p.tracks;
+  p.tracks = [...previous, track];
+  try {
+    await persistPlaylist(p);
+    setStatus(`Lagu ditambahkan ke "${p.name}"`);
+  } catch (error) {
+    p.tracks = previous;
+    showDatabaseError(error, "Gagal menyimpan lagu ke playlist.");
+  }
+  if (view === "mine" || view === "detail") renderCurrentView();
+}
+
+async function removeTrackFromPlaylist(p, track) {
+  const previous = p.tracks;
+  p.tracks = previous.filter(t => !sameTrack(t, track));
+  try {
+    await persistPlaylist(p);
+    setStatus("Lagu dihapus dari playlist");
+  } catch (error) {
+    p.tracks = previous;
+    showDatabaseError(error, "Gagal menghapus lagu dari playlist.");
+  }
+  renderCurrentView();
+}
+
+async function deletePlaylist(p) {
+  if (!p) return;
+  const allowed = (currentUser && p.owner === currentUser) || isOwnerAdmin();
+  if (!allowed) {
+    alert("Kamu tidak punya akses untuk menghapus playlist ini.");
+    return;
+  }
+  if (!confirm(`Hapus playlist "${p.name}"?`)) return;
+
+  try {
+    const { error } = await supabaseClient.from("playlists").delete().eq("id", p.id);
+    if (error) throw error;
+    playlists = playlists.filter(x => x.id !== p.id);
+    homePlaylistIds = homePlaylistIds.filter(id => id !== p.id);
+    if (activePlaylistId === p.id) activePlaylistId = null;
+    setStatus("Playlist dihapus");
+    if (view === "detail") showView("home");
+    else renderCurrentView();
+  } catch (error) {
+    showDatabaseError(error, "Gagal menghapus playlist.");
+  }
+}
+
+/* ---------------- Lagu: tambah & hapus ---------------- */
 
 async function addTrackFromLink(url) {
   if (!currentUser) {
-    loginModal.hidden = false;
-    modalNameInput.focus();
+    openLoginModal();
     return;
   }
 
@@ -401,23 +748,25 @@ async function addTrackFromLink(url) {
 
   setStatus("Memeriksa link...");
   try {
-    const existing = tracks.some(track => track.video_id === videoId || getVideoId(track.url) === videoId);
+    const existing = tracks.some(track => videoKey(track) === videoId);
     if (existing) {
       setStatus("Video ini sudah tersimpan.");
       alert("Link video YouTube ini sudah pernah ditambahkan.");
       return;
     }
 
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const { data: duplicateById, error: duplicateIdError } = await supabaseClient
       .from("tracks").select("id").eq("video_id", videoId).limit(1);
     if (duplicateIdError) throw duplicateIdError;
     const { data: duplicateByUrl, error: duplicateUrlError } = await supabaseClient
-      .from("tracks").select("id").eq("url", `https://www.youtube.com/watch?v=${videoId}`).limit(1);
+      .from("tracks").select("id").eq("url", watchUrl).limit(1);
     if (duplicateUrlError) throw duplicateUrlError;
     if ((duplicateById && duplicateById.length) || (duplicateByUrl && duplicateByUrl.length)) {
       setStatus("Video ini sudah tersimpan.");
       alert("Link video YouTube ini sudah pernah ditambahkan.");
       await loadTracks();
+      renderCurrentView();
       return;
     }
 
@@ -425,7 +774,7 @@ async function addTrackFromLink(url) {
     let title = `Lagu (${videoId})`;
     let artist = "YouTube";
     try {
-      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`);
+      const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`);
       if (res.ok) {
         const data = await res.json();
         title = data.title || title;
@@ -441,7 +790,7 @@ async function addTrackFromLink(url) {
       uploader: currentUser,
       video_id: videoId,
       thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-      url: `https://www.youtube.com/watch?v=${videoId}`
+      url: watchUrl
     };
 
     const { data, error } = await supabaseClient.from("tracks").insert(newTrack).select().single();
@@ -449,31 +798,68 @@ async function addTrackFromLink(url) {
       if (error.code === "23505") {
         alert("Video ini sudah pernah ditambahkan.");
         await loadTracks();
+        renderCurrentView();
         return;
       }
       throw error;
     }
 
     tracks.unshift(data || newTrack);
-    if (currentIndex >= 0) currentIndex++;
-    updateDisplayedTracks();
     linkInput.value = "";
-    setStatus("Berhasil ditambahkan");
+    setStatus(`Berhasil ditambahkan: ${title}`);
+    renderCurrentView();
   } catch (error) {
     showDatabaseError(error, "Gagal menyimpan lagu. Periksa koneksi dan kebijakan Supabase.");
   }
 }
 
-async function searchTracks(query) {
-  searchQuery = query.trim();
-  switchTab("all");
-  resultsHeading.textContent = searchQuery ? `Hasil pencarian: ${searchQuery}` : "Daftar Putar Utama";
-  updateDisplayedTracks();
-  setStatus(`${activeDisplayTracks.length} lagu ditemukan`);
+async function deleteTrack(track) {
+  if (!isOwnerAdmin()) {
+    alert("Hanya Owner yang memiliki akses untuk menghapus lagu!");
+    return;
+  }
+  if (!track || !confirm(`Hapus "${track.title}"?`)) return;
+
+  try {
+    if (track.id) {
+      const { error } = await supabaseClient.from("tracks").delete().eq("id", track.id);
+      if (error) throw error;
+    }
+    tracks = tracks.filter(t => !sameTrack(t, track));
+
+    // Bersihkan lagu ini dari semua playlist
+    for (const p of playlists) {
+      if (p.tracks.some(t => sameTrack(t, track))) {
+        p.tracks = p.tracks.filter(t => !sameTrack(t, track));
+        await persistPlaylist(p);
+      }
+    }
+
+    // Sesuaikan antrean pemutar
+    const cur = queue[currentIndex];
+    const wasCurrent = !!cur && sameTrack(cur, track);
+    if (wasCurrent) {
+      stopPlayback();
+    } else {
+      let removedBefore = 0;
+      if (currentIndex > 0) {
+        removedBefore = queue.slice(0, currentIndex).filter(t => sameTrack(t, track)).length;
+      }
+      queue = queue.filter(t => !sameTrack(t, track));
+      currentIndex = queue.length ? Math.max(currentIndex - removedBefore, 0) : -1;
+    }
+
+    setStatus("Lagu dihapus");
+    renderCurrentView();
+  } catch (error) {
+    showDatabaseError(error, "Gagal menghapus lagu dari database.");
+  }
 }
 
+/* ---------------- Supabase: muat data ---------------- */
+
 async function loadTracks() {
-  // Migrasikan lagu lama dari localStorage ke Supabase satu kali bila tersedia.
+  // Migrasikan lagu lama dari localStorage ke Supabase bila masih ada.
   let legacyTracks = [];
   try {
     const saved = JSON.parse(localStorage.getItem(LEGACY_TRACKS_KEY) || "[]");
@@ -500,7 +886,6 @@ async function loadTracks() {
     };
     const { data: insertedLegacy, error: legacyError } = await supabaseClient.from("tracks").insert(legacyTrack).select().single();
     if (!legacyError && insertedLegacy) {
-      currentRows.push(insertedLegacy);
       knownIds.add(videoId);
       knownUrls.add(legacyTrack.url);
     } else if (legacyError && legacyError.code !== "23505") {
@@ -511,6 +896,7 @@ async function loadTracks() {
   const { data, error } = await supabaseClient.from("tracks").select("*").order("created_at", { ascending: false });
   if (error) throw error;
   tracks = data || [];
+
   // Lengkapi video_id untuk data lama yang URL-nya masih dapat dikenali.
   for (const track of tracks) {
     const videoId = track.video_id || getVideoId(track.url || "");
@@ -519,52 +905,15 @@ async function loadTracks() {
       if (!updateError) track.video_id = videoId;
     }
   }
-
-  // Tambahkan dua lagu bawaan hanya jika sumbernya belum ada.
-  for (const defaultTrack of defaultTracks) {
-    const exists = tracks.some(track => track.video_id === defaultTrack.video_id || getVideoId(track.url || "") === defaultTrack.video_id);
-    if (exists) continue;
-    const { data: inserted, error: insertError } = await supabaseClient.from("tracks").insert(defaultTrack).select().single();
-    if (!insertError && inserted) tracks.unshift(inserted);
-    else if (insertError && insertError.code !== "23505") console.warn("Lagu bawaan tidak dapat ditambahkan:", insertError);
-  }
-  tracks.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 }
 
 async function loadPlaylists() {
-  const { data, error } = await supabaseClient.from("playlists").select("*").order("created_at", { ascending: true });
+  const { data, error } = await supabaseClient
+    .from("playlists")
+    .select("*")
+    .order("created_at", { ascending: true });
   if (error) throw error;
-  playlists = {};
-  for (const row of data || []) {
-    playlists[row.name] = Array.isArray(row.tracks) ? row.tracks : [];
-  }
-
-  // Migrasikan playlist lama dari localStorage tanpa menimpa playlist yang sudah ada di Supabase.
-  let legacyPlaylists = {};
-  try {
-    const saved = JSON.parse(localStorage.getItem(LEGACY_PLAYLISTS_KEY) || "{}");
-    if (saved && typeof saved === "object" && !Array.isArray(saved)) legacyPlaylists = saved;
-  } catch (e) {
-    console.warn("Playlist lokal lama tidak dapat dibaca.", e);
-  }
-  for (const [name, oldItems] of Object.entries(legacyPlaylists)) {
-    if (!name.trim() || playlists[name] || !Array.isArray(oldItems)) continue;
-    const migratedItems = oldItems.map(oldTrack => {
-      const videoId = oldTrack.video_id || getVideoId(oldTrack.url || "");
-      return tracks.find(track => (videoId && (track.video_id === videoId || getVideoId(track.url || "") === videoId)) || track.url === oldTrack.url) || null;
-    }).filter(Boolean);
-    const { data: created, error: createError } = await supabaseClient.from("playlists").insert({ name, tracks: migratedItems }).select().single();
-    if (!createError && created) playlists[name] = Array.isArray(created.tracks) ? created.tracks : [];
-    else if (createError && createError.code !== "23505") console.warn("Playlist lama tidak dapat dimigrasikan:", createError);
-  }
-
-  if (Object.keys(playlists).length === 0) {
-    const { data: created, error: createError } = await supabaseClient.from("playlists").insert({ name: "Favorit Saya", tracks: [] }).select().single();
-    if (createError && createError.code !== "23505") throw createError;
-    if (created) playlists[created.name] = Array.isArray(created.tracks) ? created.tracks : [];
-    if (!playlists["Favorit Saya"]) playlists["Favorit Saya"] = [];
-  }
-  activePlaylistName = Object.keys(playlists)[0] || null;
+  playlists = (data || []).map(normalizePlaylist);
 }
 
 async function initializeDatabaseData() {
@@ -572,9 +921,13 @@ async function initializeDatabaseData() {
   try {
     await loadTracks();
     await loadPlaylists();
-    updateDisplayedTracks();
-    setStatus(`${tracks.length} lagu`);
+    dataLoaded = true;
+    pickHomePlaylists();
+    renderCurrentView();
+    setStatus("");
   } catch (error) {
+    dataLoaded = true;
+    renderCurrentView();
     showDatabaseError(error, "Gagal memuat data Supabase. Periksa key, tabel, dan akses database.");
   }
 }
@@ -618,6 +971,28 @@ window.onYouTubeIframeAPIReady = function () {
   });
 };
 
+function setPlayingState(isPlaying) {
+  playIcon.toggleAttribute("hidden", isPlaying);
+  pauseIcon.toggleAttribute("hidden", !isPlaying);
+  playButton.setAttribute("aria-label", isPlaying ? "Jeda" : "Putar");
+  npPlayIcon.toggleAttribute("hidden", isPlaying);
+  npPauseIcon.toggleAttribute("hidden", !isPlaying);
+  npPlayBtn.setAttribute("aria-label", isPlaying ? "Jeda" : "Putar");
+}
+
+function updatePlayerButtons() {
+  const hasTrack = currentIndex >= 0 && !!queue[currentIndex];
+  playButton.disabled = !hasTrack;
+  prevButton.disabled = !hasTrack || currentIndex <= 0;
+  nextButton.disabled = !hasTrack || (!isShuffle && currentIndex >= queue.length - 1);
+
+  npPlayBtn.disabled = playButton.disabled;
+  npPrevBtn.disabled = prevButton.disabled;
+  npNextBtn.disabled = nextButton.disabled;
+  npAddBtn.disabled = !hasTrack;
+  npShuffleBtn.classList.toggle("active", isShuffle);
+}
+
 function onPlayerStateChange(e) {
   const S = YT.PlayerState;
   switch (e.data) {
@@ -625,7 +1000,9 @@ function onPlayerStateChange(e) {
       setPlayingState(true);
       setStatus("");
       progress.disabled = false;
+      npProgress.disabled = false;
       durationElement.textContent = formatTime(ytPlayer.getDuration());
+      npDuration.textContent = durationElement.textContent;
       startProgressTimer();
       break;
     case S.PAUSED:
@@ -644,27 +1021,35 @@ function onPlayerStateChange(e) {
 }
 
 function handleTrackEnd() {
-  if (activeDisplayTracks.length === 0) return;
+  if (queue.length === 0) return;
 
   if (isShuffle) {
     let nextRand;
     do {
-      nextRand = Math.floor(Math.random() * activeDisplayTracks.length);
-    } while (nextRand === currentIndex && activeDisplayTracks.length > 1);
-    playTrack(nextRand);
-  } else {
-    if (currentIndex < activeDisplayTracks.length - 1) {
-      playTrack(currentIndex + 1);
-    }
+      nextRand = Math.floor(Math.random() * queue.length);
+    } while (nextRand === currentIndex && queue.length > 1);
+    playIndex(nextRand);
+  } else if (currentIndex < queue.length - 1) {
+    playIndex(currentIndex + 1);
   }
 }
 
 function onPlayerError(e) {
   setPlayingState(false);
   stopProgressTimer();
-  setStatus(`Gagal memutar (kode ${e.data})`);
+  const msgs = {
+    2: "ID video tidak valid.",
+    5: "Gagal memutar di browser ini.",
+    100: "Video tidak ditemukan / privat.",
+    101: "Pemilik video melarang pemutaran di situs lain.",
+    150: "Pemilik video melarang pemutaran di situs lain.",
+    153: "Referer tidak terkirim. Buka lewat http(s), bukan file://."
+  };
+  setStatus(`${msgs[e.data] || "Gagal memutar."} (kode ${e.data})`);
+
   if ([100, 101, 150].includes(e.data)) {
-    setTimeout(handleTrackEnd, 1500);
+    const idx = currentIndex;
+    setTimeout(() => { if (currentIndex === idx) handleTrackEnd(); }, 1500);
   }
 }
 
@@ -674,10 +1059,16 @@ function startProgressTimer() {
     if (!ytReady || isSeeking) return;
     const cur = ytPlayer.getCurrentTime();
     const dur = ytPlayer.getDuration();
-    currentTimeElement.textContent = formatTime(cur);
+    const curText = formatTime(cur);
+    currentTimeElement.textContent = curText;
+    npCurrentTime.textContent = curText;
     if (dur > 0) {
-      durationElement.textContent = formatTime(dur);
-      progress.value = String((cur / dur) * 1000);
+      const durText = formatTime(dur);
+      const pos = String((cur / dur) * 1000);
+      durationElement.textContent = durText;
+      npDuration.textContent = durText;
+      progress.value = pos;
+      npProgress.value = pos;
     }
   }, 500);
 }
@@ -687,18 +1078,43 @@ function stopProgressTimer() {
   progressTimer = null;
 }
 
-function playTrack(index) {
-  const track = activeDisplayTracks[index];
+function stopPlayback() {
+  pendingVideoId = null;
+  if (ytReady) ytPlayer.stopVideo();
+  stopProgressTimer();
+  queue = [];
+  currentIndex = -1;
+  playerTitle.textContent = "Belum ada lagu";
+  playerArtist.textContent = "-";
+  playerCover.removeAttribute("src");
+  resetNowPlayingView();
+  closeNowPlaying();
+  progress.value = "0";
+  progress.disabled = true;
+  currentTimeElement.textContent = "0:00";
+  durationElement.textContent = "0:00";
+  setPlayingState(false);
+  updatePlayerButtons();
+}
+
+function startQueue(list, index) {
+  queue = [...list];
+  playIndex(index);
+}
+
+function playIndex(index) {
+  const track = queue[index];
   if (!track) return;
 
-  const videoId = getVideoId(track.url);
+  const videoId = videoKey(track);
   currentIndex = index;
   updatePlayerButtons();
-  renderTracks();
+  refreshHighlights();
 
-  playerTitle.textContent = track.title;
+  playerTitle.textContent = track.title || "Judul tidak tersedia";
   playerArtist.textContent = track.artist || "Artis tidak diketahui";
   playerCover.src = track.thumbnail || "";
+  syncNowPlayingMeta(track);
 
   progress.value = "0";
   progress.disabled = true;
@@ -719,42 +1135,74 @@ function playTrack(index) {
   }
 }
 
-/* ---------------- Event Listeners ---------------- */
+/* ---------------- Event listeners ---------------- */
+
+brandLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  goHome();
+});
 
 navTabs.forEach(tab => {
-  tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+  tab.addEventListener("click", () => {
+    const t = tab.dataset.tab;
+    if (t === "all") showView("home");
+    else if (t === "playlists") showView("mine");
+    else if (t === "upload") showView("upload");
+  });
 });
 
-createPlaylistBtn.addEventListener("click", async () => {
-  const name = prompt("Masukkan nama playlist baru:");
-  if (!name || !name.trim()) return;
-  const cleanName = name.trim();
-  if (playlists[cleanName]) {
-    alert("Playlist dengan nama ini sudah ada.");
-    return;
-  }
+showMoreBtn.addEventListener("click", () => {
+  homeLimit += HOME_PAGE_SIZE;
+  renderHome();
+});
+
+reshuffleBtn.addEventListener("click", () => {
+  pickHomePlaylists();
+  renderHomePlaylists();
+});
+
+backBtn.addEventListener("click", () => showView("home"));
+
+playAllBtn.addEventListener("click", () => {
+  const p = panelPlaylist();
+  if (p && p.tracks.length) startQueue(p.tracks, 0);
+});
+
+deletePlaylistBtn.addEventListener("click", () => deletePlaylist(panelPlaylist()));
+
+createPlaylistBtn.addEventListener("click", () => openCreatePlaylistModal(null));
+
+closePlaylistModalBtn.addEventListener("click", () => { playlistModal.hidden = true; });
+
+closeCreatePlaylistBtn.addEventListener("click", () => {
+  createPlaylistModal.hidden = true;
+  pendingTrackForNewPlaylist = null;
+});
+
+createPlaylistForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (creatingPlaylist) return;
+  creatingPlaylist = true;
+  const trackToAdd = pendingTrackForNewPlaylist;
   try {
-    const { data, error } = await supabaseClient.from("playlists").insert({ name: cleanName, tracks: [] }).select().single();
-    if (error) {
-      if (error.code === "23505") alert("Playlist dengan nama ini sudah ada di database.");
-      else throw error;
-      return;
-    }
-    playlists[cleanName] = Array.isArray(data.tracks) ? data.tracks : [];
-    activePlaylistName = cleanName;
-    switchTab("playlists");
-    setStatus("Playlist berhasil dibuat");
-  } catch (error) {
-    showDatabaseError(error, "Gagal membuat playlist.");
+    const created = await createPlaylist(playlistNameInput.value, trackToAdd);
+    if (!created) return;
+    createPlaylistModal.hidden = true;
+    pendingTrackForNewPlaylist = null;
+    playlistNameInput.value = "";
+    if (trackToAdd) setStatus(`Lagu ditambahkan ke "${created.name}"`);
+    if (!trackToAdd && view !== "mine") showView("mine");
+    else renderCurrentView();
+  } finally {
+    creatingPlaylist = false;
   }
 });
-
-closePlaylistModalBtn.addEventListener("click", () => playlistModal.hidden = true);
 
 shuffleBtn.addEventListener("click", () => {
   isShuffle = !isShuffle;
   shuffleBtn.classList.toggle("active", isShuffle);
   setStatus(isShuffle ? "Mode Acak Aktif 🔀" : "Mode Berurutan");
+  updatePlayerButtons();
 });
 
 loginLogoutBtn.addEventListener("click", () => {
@@ -763,12 +1211,13 @@ loginLogoutBtn.addEventListener("click", () => {
     localStorage.removeItem(USER_KEY);
     updateAuthUI();
   } else {
-    loginModal.hidden = false;
-    modalNameInput.focus();
+    openLoginModal();
   }
 });
 
-closeModalBtn.addEventListener("click", () => loginModal.hidden = true);
+uploadLoginBtn.addEventListener("click", openLoginModal);
+
+closeModalBtn.addEventListener("click", () => { loginModal.hidden = true; });
 
 modalLoginForm.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -798,19 +1247,25 @@ addLinkForm.addEventListener("submit", (e) => {
 
 searchForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  searchTracks(searchInput.value);
+  searchQuery = searchInput.value.trim();
+  homeLimit = HOME_PAGE_SIZE;
+  showView("home");
+  setStatus(`${getHomeTracks().length} lagu ditemukan`);
 });
 
 searchInput.addEventListener("input", () => {
   if (!searchInput.value.trim() && searchQuery) {
     searchQuery = "";
-    switchTab("all");
+    homeLimit = HOME_PAGE_SIZE;
+    showView("home", { scroll: false });
+    setStatus("");
   }
 });
 
 playButton.addEventListener("click", () => {
-  if (!ytReady || currentIndex < 0) {
-    if (currentIndex >= 0) playTrack(currentIndex);
+  if (currentIndex < 0 || !queue[currentIndex]) return;
+  if (!ytReady) {
+    playIndex(currentIndex);
     return;
   }
   const state = ytPlayer.getPlayerState();
@@ -819,32 +1274,125 @@ playButton.addEventListener("click", () => {
   } else if (state === YT.PlayerState.PAUSED) {
     ytPlayer.playVideo();
   } else {
-    playTrack(currentIndex);
+    playIndex(currentIndex);
   }
 });
 
-prevButton.addEventListener("click", () => { if (currentIndex > 0) playTrack(currentIndex - 1); });
+prevButton.addEventListener("click", () => { if (currentIndex > 0) playIndex(currentIndex - 1); });
 nextButton.addEventListener("click", () => {
-  if (isShuffle) {
-    handleTrackEnd();
-  } else if (currentIndex < activeDisplayTracks.length - 1) {
-    playTrack(currentIndex + 1);
+  if (isShuffle) handleTrackEnd();
+  else if (currentIndex < queue.length - 1) playIndex(currentIndex + 1);
+});
+
+[progress, npProgress].forEach(slider => {
+  slider.addEventListener("pointerdown", () => { isSeeking = true; });
+  slider.addEventListener("input", () => {
+    progress.value = slider.value;
+    npProgress.value = slider.value;
+    if (!ytReady) return;
+    const dur = ytPlayer.getDuration();
+    if (dur > 0) {
+      const text = formatTime((Number(slider.value) / 1000) * dur);
+      currentTimeElement.textContent = text;
+      npCurrentTime.textContent = text;
+    }
+  });
+  slider.addEventListener("change", () => {
+    if (ytReady) {
+      const dur = ytPlayer.getDuration();
+      if (dur > 0) ytPlayer.seekTo((Number(slider.value) / 1000) * dur, true);
+    }
+    isSeeking = false;
+  });
+});
+
+/* ---------------- Detail lagu (Now Playing) ---------------- */
+
+function syncNowPlayingMeta(track) {
+  npTitle.textContent = track.title || "Judul tidak tersedia";
+  npArtist.textContent = track.artist || "Artis tidak diketahui";
+  const uploaderName = track.uploader || "Anonim";
+  npUploader.textContent = `Diupload oleh ${uploaderName === OWNER_NAME ? `${uploaderName} ${OWNER_ICON}` : uploaderName}`;
+
+  if (track.thumbnail) {
+    npCover.src = track.thumbnail;
+    npBackdrop.style.backgroundImage = `url(${JSON.stringify(track.thumbnail)})`;
+  } else {
+    npCover.removeAttribute("src");
+    npBackdrop.style.backgroundImage = "";
+  }
+
+  npProgress.value = "0";
+  npProgress.disabled = true;
+  npCurrentTime.textContent = "0:00";
+  npDuration.textContent = "0:00";
+}
+
+function resetNowPlayingView() {
+  npTitle.textContent = "Belum ada lagu";
+  npArtist.textContent = "-";
+  npUploader.textContent = "";
+  npCover.removeAttribute("src");
+  npBackdrop.style.backgroundImage = "";
+  npProgress.value = "0";
+  npProgress.disabled = true;
+  npCurrentTime.textContent = "0:00";
+  npDuration.textContent = "0:00";
+}
+
+function openNowPlaying() {
+  if (!nowPlayingView.hidden) return;
+  if (currentIndex < 0 || !queue[currentIndex]) return;
+  nowPlayingView.hidden = false;
+  document.body.classList.add("np-open");
+  // Tombol Kembali di HP menutup detail lagu, bukan keluar dari aplikasi
+  try {
+    history.pushState({ restifyNowPlaying: true }, "");
+    npHistory = true;
+  } catch (e) {
+    npHistory = false;
+  }
+  npCloseBtn.focus();
+}
+
+function closeNowPlaying(fromPopState = false) {
+  if (nowPlayingView.hidden) return;
+  nowPlayingView.hidden = true;
+  document.body.classList.remove("np-open");
+  const hadHistory = npHistory;
+  npHistory = false;
+  if (!fromPopState && hadHistory) history.back();
+}
+
+nowPlayingOpen.addEventListener("click", openNowPlaying);
+nowPlayingOpen.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    openNowPlaying();
   }
 });
 
-progress.addEventListener("pointerdown", () => { isSeeking = true; });
-progress.addEventListener("input", () => {
-  if (!ytReady) return;
-  const dur = ytPlayer.getDuration();
-  if (dur > 0) currentTimeElement.textContent = formatTime((Number(progress.value) / 1000) * dur);
+npCloseBtn.addEventListener("click", () => closeNowPlaying());
+npAddBtn.addEventListener("click", () => {
+  const track = queue[currentIndex];
+  if (track) openAddToPlaylistModal(track);
 });
-progress.addEventListener("change", () => {
-  if (ytReady) {
-    const dur = ytPlayer.getDuration();
-    if (dur > 0) ytPlayer.seekTo((Number(progress.value) / 1000) * dur, true);
+
+// Tombol di detail lagu memakai logika yang sama dengan tombol di bar bawah
+npPlayBtn.addEventListener("click", () => playButton.click());
+npPrevBtn.addEventListener("click", () => prevButton.click());
+npNextBtn.addEventListener("click", () => nextButton.click());
+npShuffleBtn.addEventListener("click", () => shuffleBtn.click());
+
+window.addEventListener("popstate", () => closeNowPlaying(true));
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !nowPlayingView.hidden && !document.querySelector(".modal:not([hidden])")) {
+    closeNowPlaying();
   }
-  isSeeking = false;
 });
+
+/* ---------------- Mulai ---------------- */
 
 updateAuthUI();
 initializeDatabaseData();
