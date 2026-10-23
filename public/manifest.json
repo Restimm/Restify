@@ -9,5 +9,13 @@
   "start_url": "/",
   "theme_color": "#0b0b09",
   "id": "https://restify-theta.vercel.app/",
-  "description": "Restify Personal Web Music Player"
+  "description": "Restify Personal Web Music Player",
+  "icons": [
+    {
+      "src": "/images/Restify.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
 }
