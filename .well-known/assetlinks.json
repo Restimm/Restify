@@ -1,0 +1,9 @@
+
+   [{
+     "relation": ["delegate_permission/common.handle_all_urls"],
+     "target": {
+       "namespace": "android_app",
+       "package_name": "com.restify.app",
+       "sha256_cert_fingerprints": ["46:46:2D:75:80:9C:47:5C:30:63:5E:67:51:37:A6:E1:81:9C:03:15:F2:3A:DB:A6:57:F6:17:91:F2:BE:4B:32"]
+     }
+   }]
