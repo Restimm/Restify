@@ -942,6 +942,80 @@ let pendingVideoId = null;
 let progressTimer = null;
 let isSeeking = false;
 
+/* ---------------- Media Session (notifikasi & kontrol layar kunci) ---------------- */
+
+const hasMediaSession = "mediaSession" in navigator;
+
+// Judul, artis, dan sampul yang tampil di notifikasi / layar kunci
+function updateMediaSessionMetadata(track) {
+  if (!hasMediaSession || !track) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title || "Judul tidak tersedia",
+      artist: track.artist || "Artis tidak diketahui",
+      album: "Restify",
+      artwork: track.thumbnail
+        ? [{ src: track.thumbnail, sizes: "480x360", type: "image/jpeg" }]
+        : []
+    });
+  } catch (e) {
+    console.warn("Media Session metadata gagal:", e);
+  }
+}
+
+// "playing" | "paused" | "none"
+function setMediaSessionState(state) {
+  if (!hasMediaSession) return;
+  try { navigator.mediaSession.playbackState = state; } catch (e) {}
+}
+
+// Posisi & durasi agar slider di layar kunci ikut bergerak
+function updateMediaSessionPosition() {
+  if (!hasMediaSession || !navigator.mediaSession.setPositionState || !ytReady) return;
+  try {
+    const duration = ytPlayer.getDuration();
+    if (!(duration > 0)) return;
+    const position = Math.min(Math.max(ytPlayer.getCurrentTime(), 0), duration);
+    navigator.mediaSession.setPositionState({ duration, playbackRate: 1, position });
+  } catch (e) {}
+}
+
+function clearMediaSession() {
+  if (!hasMediaSession) return;
+  try {
+    navigator.mediaSession.metadata = null;
+    navigator.mediaSession.playbackState = "none";
+  } catch (e) {}
+}
+
+function initMediaSessionActions() {
+  if (!hasMediaSession) return;
+  const setAction = (action, handler) => {
+    try { navigator.mediaSession.setActionHandler(action, handler); } catch (e) {}
+  };
+
+  setAction("play", () => {
+    if (currentIndex < 0 || !queue[currentIndex]) return;
+    const state = ytReady ? ytPlayer.getPlayerState() : null;
+    if (state === YT.PlayerState.PAUSED) ytPlayer.playVideo();
+    else if (state !== YT.PlayerState.PLAYING && state !== YT.PlayerState.BUFFERING) playIndex(currentIndex);
+  });
+  setAction("pause", () => { if (ytReady) ytPlayer.pauseVideo(); });
+  setAction("previoustrack", () => prevButton.click());
+  setAction("nexttrack", () => nextButton.click());
+  setAction("seekto", (details) => {
+    if (ytReady && Number.isFinite(details.seekTime)) ytPlayer.seekTo(details.seekTime, true);
+  });
+  setAction("seekbackward", (details) => {
+    if (ytReady) ytPlayer.seekTo(Math.max(0, ytPlayer.getCurrentTime() - (details.seekOffset || 10)), true);
+  });
+  setAction("seekforward", (details) => {
+    if (ytReady) ytPlayer.seekTo(ytPlayer.getCurrentTime() + (details.seekOffset || 10), true);
+  });
+}
+
+initMediaSessionActions();
+
 (function loadYouTubeAPI() {
   const tag = document.createElement("script");
   tag.src = "https://www.youtube.com/iframe_api";
@@ -978,6 +1052,7 @@ function setPlayingState(isPlaying) {
   npPlayIcon.toggleAttribute("hidden", isPlaying);
   npPauseIcon.toggleAttribute("hidden", !isPlaying);
   npPlayBtn.setAttribute("aria-label", isPlaying ? "Jeda" : "Putar");
+  setMediaSessionState(isPlaying ? "playing" : "paused");
 }
 
 function updatePlayerButtons() {
@@ -1004,9 +1079,11 @@ function onPlayerStateChange(e) {
       durationElement.textContent = formatTime(ytPlayer.getDuration());
       npDuration.textContent = durationElement.textContent;
       startProgressTimer();
+      updateMediaSessionPosition();
       break;
     case S.PAUSED:
       setPlayingState(false);
+      updateMediaSessionPosition();
       break;
     case S.BUFFERING:
       setPlayingState(true);
@@ -1095,6 +1172,7 @@ function stopPlayback() {
   durationElement.textContent = "0:00";
   setPlayingState(false);
   updatePlayerButtons();
+  clearMediaSession();
 }
 
 function startQueue(list, index) {
@@ -1115,6 +1193,7 @@ function playIndex(index) {
   playerArtist.textContent = track.artist || "Artis tidak diketahui";
   playerCover.src = track.thumbnail || "";
   syncNowPlayingMeta(track);
+  updateMediaSessionMetadata(track);
 
   progress.value = "0";
   progress.disabled = true;
