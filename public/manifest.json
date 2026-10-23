@@ -1,0 +1,13 @@
+{
+  "background_color": "#030303",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Restify",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "Restify",
+  "start_url": "/",
+  "theme_color": "#0b0b09",
+  "id": "https://restify-theta.vercel.app/",
+  "description": "Restify Personal Web Music Player"
+}
